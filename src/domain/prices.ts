@@ -237,25 +237,27 @@ export function getChainlinkChartPricesFromGraph(tokenSymbol, period) {
 }
 
 export function useChartPrices(chainId, symbol, isStable, period, currentAveragePrice) {
-  const swrKey = !isStable && symbol ? ["getChartCandles", chainId, symbol, period] : null;
+  const isBrowser = typeof window !== "undefined";
+
+  const swrKey =
+    isBrowser && !isStable && symbol ? ["getChartCandles", chainId, symbol, period] : null;
+
   let { data: prices, mutate: updatePrices } = useSWR(swrKey, {
     fetcher: async (...args) => {
       try {
         return await getChartPricesFromStats(chainId, symbol, period);
       } catch (ex) {
-        // eslint-disable-next-line no-console
-        console.warn(ex);
-        // eslint-disable-next-line no-console
-        console.warn("Switching to graph chainlink data");
-        try {
-          return await getChainlinkChartPricesFromGraph(symbol, period);
-        } catch (ex2) {
-          // eslint-disable-next-line no-console
-          console.warn("getChainlinkChartPricesFromGraph failed");
-          // eslint-disable-next-line no-console
-          console.warn(ex2);
-          return [];
+        if (isBrowser) {
+          console.warn(ex);
+          console.warn("Switching to graph chainlink data");
+          try {
+            return await getChainlinkChartPricesFromGraph(symbol, period);
+          } catch (ex2) {
+            console.warn("getChainlinkChartPricesFromGraph failed");
+            console.warn(ex2);
+          }
         }
+        return [];
       }
     },
     dedupingInterval: 60000,
@@ -263,8 +265,9 @@ export function useChartPrices(chainId, symbol, isStable, period, currentAverage
   });
 
   const currentAveragePriceString = currentAveragePrice && currentAveragePrice.toString();
+
   const retPrices = useMemo(() => {
-    if (isStable) {
+    if (isStable || !isBrowser) {
       return getStablePriceData(period);
     }
 
@@ -278,7 +281,7 @@ export function useChartPrices(chainId, symbol, isStable, period, currentAverage
     }
 
     return fillGaps(_prices, CHART_PERIODS[period]);
-  }, [prices, isStable, currentAveragePriceString, period]);
+  }, [prices, isStable, currentAveragePriceString, period, isBrowser]);
 
   return [retPrices, updatePrices];
 }
